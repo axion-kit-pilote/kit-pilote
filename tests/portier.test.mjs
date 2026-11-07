@@ -528,3 +528,19 @@ test('R3 : ahead_by absent ou non numérique avec 0 fichier -> trop (sensible)',
   const api0 = { lire: async () => ({ ahead_by: 0, behind_by: 0, files: [] }) };
   assert.equal((await comparer(api0, 'axion-kit', 'x', 'main', sha('c'))).trop, false);
 });
+
+test('L3 : kit-nouveau protège la branche etat (ni suppression ni force-push), après son remplissage', async () => {
+  const appels = [];
+  const gh = (...a) => { appels.push(a.join(' ')); return a.includes('--jq') ? 'f'.repeat(40) : ''; };
+  const corps = [];
+  const ghJson = (a, c) => { appels.push(a.join(' ')); corps.push([a.join(' '), c]); return ''; };
+  await creer('mon-projet', 'une description', 4242, { log() {}, gh, ghJson, pause: async () => {} });
+  const prot = corps.find(([a]) => /branches\/etat\/protection/.test(a));
+  assert.ok(prot, 'protection de etat posée');
+  assert.equal(prot[1].allow_deletions, false);
+  assert.equal(prot[1].allow_force_pushes, false);
+  assert.equal(prot[1].enforce_admins, true);
+  const iProt = appels.findIndex((a) => /branches\/etat\/protection/.test(a));
+  const iRep = appels.findIndex((a) => /contents\/REPRENDRE.md/.test(a) && /PUT/.test(a));
+  assert.ok(iRep >= 0 && iRep < iProt, 'remplissage avant protection');
+});

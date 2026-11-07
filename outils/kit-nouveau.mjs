@@ -22,6 +22,10 @@ export function validerAppId(id) {
   if (!/^\d+$/.test(id ?? '')) throw new Error('app_id manquant ou invalide (argument ou variable PORTIER_APP_ID)');
   return Number(id);
 }
+export function corpsProtectionEtat() {
+  return { required_status_checks: null, enforce_admins: true, required_pull_request_reviews: null, restrictions: null, allow_force_pushes: false, allow_deletions: false };
+}
+
 export function corpsProtection(appId) {
   return {
     required_status_checks: {
@@ -66,6 +70,8 @@ export async function creer(nom, description, appId, { log = console.log, gh = g
   };
   ecrire('SPEC.md', `# ${nom}\n\n${description}\n`, 'SPEC : description initiale');
   ecrire('REPRENDRE.md', `# REPRENDRE\n\nETAT: TRAVAIL\n\nRien de fait. Lire SPEC.md.\n`, 'REPRENDRE : ETAT TRAVAIL');
+  // etat : ni suppression ni force-push (essai E8-mini : la suppression passait).
+  ghJson(['-X', 'PUT', `repos/${depot}/branches/etat/protection`], corpsProtectionEtat());
 
   ghJson(['-X', 'PATCH', `repos/${depot}`], {
     security_and_analysis: {
@@ -73,7 +79,7 @@ export async function creer(nom, description, appId, { log = console.log, gh = g
       secret_scanning_push_protection: { status: 'enabled' },
     },
   });
-  log(`${depot} prêt : sujet kit-projet, branche etat, protection de main, push protection.`);
+  log(`${depot} prêt : sujet kit-projet, branche etat, protection de main et de etat, push protection.`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
