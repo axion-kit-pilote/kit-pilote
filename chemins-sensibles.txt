@@ -61,3 +61,7 @@ vitest.workspace.*
 **/scripts/**
 **/outils/**
 **/.husky/**
+.kit-version
+nixpacks.toml
+Procfile
+.nixpacks/**
