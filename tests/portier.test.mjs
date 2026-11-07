@@ -485,10 +485,10 @@ test('C3 : nouveaux chemins sensibles (verrous, config d\'hébergement, formes i
   const texte = readFileSync(new URL('../chemins-sensibles.txt', import.meta.url), 'utf8');
   const lignes = texte.split(/\r?\n/).map((l) => l.trim());
   for (const e of ['.pnpmfile.*', 'package-lock.json', 'yarn.lock', '.yarnrc*', 'bun.lock*', 'vercel.json', 'netlify.toml', '.eslintrc*', '.babelrc*',
-    'vitest.workspace.*', '.gitleaks*', '.kit-version', 'nixpacks.toml', 'Procfile', '.nixpacks/**', 'METHODE.md', '.postcssrc*', '.browserslistrc', '*.d.ts', '**/scripts/**', '**/outils/**', '**/.husky/**']) assert.ok(lignes.includes(e), `motif manquant : ${e}`);
+    'vitest.workspace.*', '.gitleaks*', '.kit-version', 'nixpacks.toml', 'Procfile', '.nixpacks/**', 'METHODE.md', 'proprietes.yaml', 'modele-approuve.txt', '.postcssrc*', '.browserslistrc', '*.d.ts', '**/scripts/**', '**/outils/**', '**/.husky/**']) assert.ok(lignes.includes(e), `motif manquant : ${e}`);
   const m = parserMotifs(texte);
   for (const c of ['.pnpmfile.cjs', 'package-lock.json', 'a/package-lock.json', 'yarn.lock', '.yarnrc', '.yarnrc.yml', 'bun.lock', 'bun.lockb', 'vercel.json',
-    'netlify.toml', '.eslintrc.json', '.babelrc', '.babelrc.js', 'vitest.workspace.ts', '.gitleaks.toml', '.gitleaksignore', '.kit-version', 'nixpacks.toml', 'Procfile', '.nixpacks/plan.json', 'METHODE.md', '.postcssrc.json', '.browserslistrc', 'src/types/x.d.ts', 'next-env.d.ts', 'apps/web/CLAUDE.md', 'apps/web/scripts/x.sh', 'apps/outils/a.mjs', 'apps/web/.husky/pre-commit'])
+    'netlify.toml', '.eslintrc.json', '.babelrc', '.babelrc.js', 'vitest.workspace.ts', '.gitleaks.toml', '.gitleaksignore', '.kit-version', 'nixpacks.toml', 'Procfile', '.nixpacks/plan.json', 'METHODE.md', 'proprietes.yaml', 'modele-approuve.txt', '.postcssrc.json', '.browserslistrc', 'src/types/x.d.ts', 'next-env.d.ts', 'apps/web/CLAUDE.md', 'apps/web/scripts/x.sh', 'apps/outils/a.mjs', 'apps/web/.husky/pre-commit'])
     assert.ok(motifCorrespondant(m, c), c);
 });
 

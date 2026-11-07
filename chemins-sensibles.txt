@@ -69,3 +69,5 @@ METHODE.md
 .postcssrc*
 .browserslistrc
 *.d.ts
+proprietes.yaml
+modele-approuve.txt
