@@ -1,0 +1,11 @@
+# Exclus du transfert vers kit-pilote (public). Un chemin par ligne ; « / » final = dossier entier.
+# Le catalogue cite des dépôts privés : il ne doit JAMAIS partir dans kit-pilote.
+# Le transfert (copie de ce dépôt vers kit-pilote) ignore tout ce qui est listé ici.
+catalogue/
+outils/catalogue-index.mjs
+outils/kit-adopter.mjs
+outils/kit-maj.mjs
+outils/lib/
+outils/test/
+docs/
+REPRENDRE*.md

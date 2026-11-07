@@ -1,0 +1,6 @@
+# Configuration gitleaks de kit-pilote : imposée par --config (surveiller.mjs).
+# Les fichiers .gitleaks.toml / .gitleaksignore du dépôt scanné ne sont jamais lus.
+title = "kit-pilote"
+
+[extend]
+useDefault = true

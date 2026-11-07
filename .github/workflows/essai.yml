@@ -1,0 +1,44 @@
+name: essai
+run-name: Site d'essai ${{ inputs.outil || '(tous les outils)' }}
+
+# Déploie le SHA de main d'un outil sur son site d'essai.
+# Déclencheurs : le portier (workflow_dispatch) ou un cron qui compare les SHA.
+on:
+  workflow_dispatch:
+    inputs:
+      outil:
+        description: "Nom de l'outil (vide = tous)"
+        required: false
+        type: string
+      sha:
+        description: "SHA de main à déployer (vide = tête de main)"
+        required: false
+        type: string
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: essai   # un seul groupe : une seule exécution à la fois sur les applications d'essai (le cron rattrape un déclenchement écarté)
+  cancel-in-progress: false
+
+jobs:
+  deployer-essai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: essai
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Déployer sur le site d'essai
+        env:
+          COOLIFY_URL_ESSAI: ${{ secrets.COOLIFY_URL_ESSAI }}
+          COOLIFY_JETON_ESSAI: ${{ secrets.COOLIFY_JETON_ESSAI }}
+          SONDES_ESSAI: ${{ secrets.SONDES_ESSAI }}
+          GH_TOKEN: ${{ github.token }}
+          OUTIL: ${{ inputs.outil }}
+          SHA: ${{ inputs.sha }}
+        run: node outils/l7.mjs essai

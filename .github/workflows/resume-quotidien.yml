@@ -1,0 +1,40 @@
+name: resume-quotidien
+# Une issue « Résumé du JJ/MM » par jour dans kit-pilote ; ferme celle de la veille.
+on:
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
+concurrency:
+  group: resume-quotidien
+  cancel-in-progress: false
+permissions:
+  contents: read
+  issues: write    # issues du dépôt pilote (via github.token)
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: pilote
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - id: cle
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.PORTIER_CLIENT_ID }}
+          private-key: ${{ secrets.PORTIER_CLE }}
+          owner: axion-kit  # zizmor: ignore[github-app] jeton volontairement large : voir docs/audit-workflows.md
+          permission-contents: read
+          permission-pull-requests: read
+          permission-checks: read
+          permission-metadata: read
+      - run: node src/resume-quotidien.mjs
+        env:
+          GH_TOKEN: ${{ steps.cle.outputs.token }}
+          PORTIER_APP_ID: ${{ vars.PORTIER_APP_ID }}
+          PILOTE_TOKEN: ${{ github.token }}
+          ARRET: ${{ vars.ARRET }}

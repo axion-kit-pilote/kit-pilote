@@ -27,7 +27,7 @@ jobs:
         with:
           client-id: ${{ vars.PORTIER_CLIENT_ID }}
           private-key: ${{ secrets.PORTIER_CLE }}
-          owner: axion-kit
+          owner: axion-kit  # zizmor: ignore[github-app] jeton volontairement large : voir docs/audit-workflows.md
           permission-checks: write
           permission-contents: write
           permission-pull-requests: write

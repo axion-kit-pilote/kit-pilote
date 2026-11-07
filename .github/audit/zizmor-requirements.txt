@@ -1,0 +1,4 @@
+# zizmor 1.32.0 : roue manylinux x86_64 (runner ubuntu-latest). Somme sha256 vérifiée contre PyPI.
+# Installation : pip install --require-hashes --only-binary=:all: -r .github/audit/zizmor-requirements.txt
+zizmor==1.32.0 \
+    --hash=sha256:84a6acb975accc13408786a2bd274b572537ca19c933ebbc13e78f3988562071

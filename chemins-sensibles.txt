@@ -3,6 +3,10 @@
 # * = sans « / » ; ** = tout, « / » compris ; ? = un caractère. Insensible à la casse.
 # Suppression ou renommage d'un fichier de test (**/*.test.*) : géré par le code.
 .github/**
+renovate.json
+renovate.json5
+.renovaterc
+.renovaterc.json
 .claude/**
 CLAUDE.md
 chemins-sensibles.txt

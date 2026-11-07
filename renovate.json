@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "schedule": ["before 6am on monday"],
+  "timezone": "Europe/Paris",
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "prConcurrentLimit": 3,
+  "automerge": false,
+  "platformAutomerge": false,
+  "packageRules": [
+    {
+      "description": "Tout est regroupé en une seule PR hebdomadaire ; elle passe par le portier / Will, jamais de fusion automatique.",
+      "matchPackageNames": ["*"],
+      "groupName": "mises à jour hebdomadaires",
+      "automerge": false
+    }
+  ]
+}

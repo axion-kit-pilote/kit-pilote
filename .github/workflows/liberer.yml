@@ -1,0 +1,70 @@
+name: liberer
+run-name: Libérer ${{ inputs.outil }} ${{ inputs.sha }} en production
+
+# Mise en production d'un SHA déjà déployé et vérifié sur le site d'essai.
+# Le job "production" attend l'approbation de Will (relecteur de l'environnement).
+on:
+  workflow_dispatch:
+    inputs:
+      outil:
+        description: "Nom de l'outil"
+        required: true
+        type: string
+      sha:
+        description: "SHA complet (40 caractères), déjà sur le site d'essai"
+        required: true
+        type: string
+      depuis:
+        description: "SHA actuellement en production (facultatif, pour le résumé)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-${{ inputs.outil }}
+  cancel-in-progress: false
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: essai
+    permissions:
+      contents: read
+      actions: read   # lecture des règles de l'environnement production
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Vérifier l'essai et résumer les changements
+        env:
+          COOLIFY_URL_ESSAI: ${{ secrets.COOLIFY_URL_ESSAI }}
+          COOLIFY_JETON_ESSAI: ${{ secrets.COOLIFY_JETON_ESSAI }}
+          SONDES_ESSAI: ${{ secrets.SONDES_ESSAI }}
+          GH_TOKEN: ${{ github.token }}
+          ARRET: ${{ vars.ARRET }}
+          OUTIL: ${{ inputs.outil }}
+          SHA: ${{ inputs.sha }}
+          DEPUIS: ${{ inputs.depuis }}
+        run: node outils/l7.mjs verifier-essai
+
+  production:
+    needs: verifier
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Sauvegarder, déployer, sonder (retour arrière si KO)
+        env:
+          COOLIFY_URL_PRODUCTION: ${{ secrets.COOLIFY_URL_PRODUCTION }}
+          COOLIFY_JETON_PRODUCTION: ${{ secrets.COOLIFY_JETON_PRODUCTION }}
+          SONDES_PRODUCTION: ${{ secrets.SONDES_PRODUCTION }}
+          ARRET: ${{ vars.ARRET }}
+          OUTIL: ${{ inputs.outil }}
+          SHA: ${{ inputs.sha }}
+        run: node outils/l7.mjs liberer

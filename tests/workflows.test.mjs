@@ -54,3 +54,16 @@ test('C7 : .gitattributes impose eol=lf', () => {
   const t = readFileSync(new URL('../.gitattributes', import.meta.url), 'utf8');
   assert.match(t, /^\* text eol=lf$/m);
 });
+
+test('M3 : tests.yml lance node --test (pull_request + push main, ubuntu, Node 20, droits minimaux, sans identifiants persistés)', () => {
+  const t = lire('tests.yml');
+  assert.match(t, /^on:\n  pull_request:\n  push:\n    branches: \[main\]\n/m);
+  assert.match(t, /^permissions:\n  contents: read\n/m);
+  assert.match(t, /runs-on: ubuntu-latest/);
+  assert.match(t, /node-version: '20'/);
+  assert.match(t, /persist-credentials: false/);
+  assert.match(t, /^\s+- run: node --test$/m);
+  assert.ok(!/secrets\.|permission-|write/.test(t.replace(/^permissions:[\s\S]*?contents: read\n/m, '')), 'aucun secret, aucune écriture');
+  // mêmes SHA que portier.yml (une seule version épinglée dans le dépôt)
+  for (const a of ['actions/checkout', 'actions/setup-node']) assert.equal(new RegExp(`${a}@([0-9a-f]{40})`).exec(t)?.[1], new RegExp(`${a}@([0-9a-f]{40})`).exec(portier)?.[1], a);
+});
