@@ -1,0 +1,41 @@
+name: portier
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+concurrency:
+  group: portier
+  cancel-in-progress: false
+permissions:
+  contents: read
+  actions: write   # dispatch de porte.yml (dépôt pilote, via github.token)
+  issues: write    # issues d'alerte (dépôt pilote, via github.token)
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: pilote
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - id: cle
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.PORTIER_CLIENT_ID }}
+          private-key: ${{ secrets.PORTIER_CLE }}
+          owner: axion-kit
+          permission-checks: write
+          permission-contents: write
+          permission-pull-requests: write
+          permission-administration: read
+          permission-actions: read
+      - run: node src/portier.mjs
+        env:
+          GH_TOKEN: ${{ steps.cle.outputs.token }}
+          PORTIER_APP_ID: ${{ vars.PORTIER_APP_ID }}
+          PILOTE_TOKEN: ${{ github.token }}
+          ARRET: ${{ vars.ARRET }}

@@ -1,0 +1,72 @@
+name: porte
+run-name: porte ${{ inputs.repo }}#${{ inputs.pr }} @ ${{ inputs.sha }}
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: 'Dépôt (axion-kit/<nom>)'
+        required: true
+      pr:
+        description: 'Numéro de la PR'
+        required: true
+      sha:
+        description: 'SHA de tête approuvé'
+        required: true
+concurrency:
+  group: porte-${{ inputs.repo }}-${{ inputs.pr }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  # 1er job : sans environnement ni secret. Il écrit dans le résumé du run la liste des fichiers
+  # (compare fixé sur le sha) que Will lit avant d'approuver le job protégé.
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - run: node src/resume.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_REPO: ${{ inputs.repo }}
+          INPUT_PR: ${{ inputs.pr }}
+          INPUT_SHA: ${{ inputs.sha }}
+  porte:
+    needs: resume
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: revue-will
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - id: cle
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.PORTIER_CLIENT_ID }}
+          private-key: ${{ secrets.PORTIER_CLE }}
+          owner: axion-kit
+          permission-checks: write
+          permission-contents: write
+          permission-pull-requests: write
+          permission-administration: read
+          permission-actions: read
+          permission-workflows: write
+      - run: node src/porte.mjs
+        env:
+          GH_TOKEN: ${{ steps.cle.outputs.token }}
+          PORTIER_APP_ID: ${{ vars.PORTIER_APP_ID }}
+          ARRET: ${{ vars.ARRET }}
+          INPUT_REPO: ${{ inputs.repo }}
+          INPUT_PR: ${{ inputs.pr }}
+          INPUT_SHA: ${{ inputs.sha }}

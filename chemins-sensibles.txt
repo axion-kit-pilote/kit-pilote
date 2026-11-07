@@ -1,0 +1,63 @@
+# Chemins sensibles (motifs glob simples, un par ligne).
+# Sans « / » : correspond au nom du fichier à tout niveau. Avec « / » : depuis la racine.
+# * = sans « / » ; ** = tout, « / » compris ; ? = un caractère. Insensible à la casse.
+# Suppression ou renommage d'un fichier de test (**/*.test.*) : géré par le code.
+.github/**
+.claude/**
+CLAUDE.md
+chemins-sensibles.txt
+package.json
+pnpm-lock.yaml
+next.config.*
+middleware.*
+**/auth/**
+**/paiement*/**
+**/facturation/**
+.env*
+Dockerfile*
+docker-compose*
+**/migrations/**
+prisma/schema.prisma
+# Configuration lue par l'agent ou ses outils, contournement de la CI, chaîne de build.
+**/.claude/**
+.claude.json
+.mcp.json
+CLAUDE.local.md
+.gitmodules
+.gitattributes
+.ripgreprc
+.husky/**
+.npmrc
+bunfig.toml
+outils/**
+pilotage/postes/**
+pilotage/fiches/**
+pilotage/equipes/**
+pnpm-workspace.yaml
+*.config.*
+tsconfig*
+vendor/**
+__captures__/**
+LICENSE
+composer.*
+requirements*.txt
+pyproject.toml
+Makefile
+scripts/**
+.nvmrc
+.node-version
+# Contre-relecture 19dff5f (C3) : verrous, hébergement, outillage, formes imbriquées.
+.pnpmfile.*
+package-lock.json
+yarn.lock
+.yarnrc*
+bun.lock*
+vercel.json
+netlify.toml
+.eslintrc*
+.babelrc*
+vitest.workspace.*
+.gitleaks*
+**/scripts/**
+**/outils/**
+**/.husky/**
