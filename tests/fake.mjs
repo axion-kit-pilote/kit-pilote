@@ -92,6 +92,13 @@ export function creerFake({ depots, pilote = PILOTE }) {
     if (m === 'GET' && rest === '/pulls') return json(pagine(Object.values(d.pulls).map((p) => prVue(d, p, false)), q));
     if ((x = /^\/pulls\/(\d+)$/.exec(rest)) && m === 'GET') return json(prVue(d, d.pulls[x[1]], true));
     if ((x = /^\/pulls\/(\d+)\/files$/.exec(rest))) return json(pagine(d.pulls[x[1]].fichiersFiles, q));
+    if ((x = /^\/pulls\/(\d+)\/update-branch$/.exec(rest)) && m === 'PUT') {
+      const p = d.pulls[x[1]];
+      if (p.majStatut) return json({ message: 'refus simulé' }, p.majStatut);
+      if (p.conflit) return json({ message: 'merge conflict' }, 422);
+      if (corps.expected_head_sha !== p.reelle) return json({ message: "expected head sha didn't match current head ref" }, 422);
+      (d.majs ??= []).push({ pr: p.number, ...corps }); return json({ message: 'Updating pull request branch.' }, 202);
+    }
     if ((x = /^\/pulls\/(\d+)\/merge$/.exec(rest)) && m === 'PUT') {
       const p = d.pulls[x[1]];
       if (corps.sha !== p.reelle) return json({ message: 'Head branch was modified' }, 409);

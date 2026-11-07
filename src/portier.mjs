@@ -43,7 +43,20 @@ async function traiterPr(ctx, depot, numero) {
 
   // PR à jour avec main, sinon on attend la mise à jour (la CI à H ne dit rien du résultat fusionné).
   const retard = await comparer(api, o, r, 'main', H, { fichiers: false });
-  if (retard.behind_by !== 0) return log(`  ${etiquette} : pas à jour avec main (retard ${retard.behind_by}), en attente de mise à jour`);
+  if (retard.behind_by !== 0) {
+    // Mise à jour demandée par le portier lui-même (fusion de main dans la PR, tête attendue = H) : la CI repartira
+    // sur la nouvelle tête, et l'accord de Will ne sera demandé qu'ensuite (évite un 2e clic).
+    // Conflit connu : on ne relance pas la demande à chaque cycle.
+    if (pr.mergeable === false) return log(`  ${etiquette} : pas à jour avec main (retard ${retard.behind_by}) et en conflit : en attente`);
+    try {
+      await api.ecrire('PUT', `/repos/${o}/${r}/pulls/${numero}/update-branch`, { expected_head_sha: H });
+      return log(`  ${etiquette} : pas à jour avec main (retard ${retard.behind_by}), mise à jour demandée`);
+    } catch (e) {
+      // 422 = conflit ou tête déjà changée : attente. Toute autre erreur (droits, panne, quota) remonte et est comptée.
+      if (!/ -> 422\b/.test(String(e?.message))) throw e;
+      return log(`  ${etiquette} : pas à jour avec main (retard ${retard.behind_by}), mise à jour impossible (conflit ou tête changée) : en attente`);
+    }
+  }
 
   // Fichiers : compare fixé sur H (jamais /pulls/n/files, qui montre la tête « du moment »).
   const cmp = await comparer(api, o, r, pr.base.sha, H);
