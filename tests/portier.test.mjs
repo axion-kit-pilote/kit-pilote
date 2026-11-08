@@ -305,6 +305,62 @@ test('I1 : CI de main : seuls les runs event=push du bon chemin et du dépôt co
   }
 });
 
+// Têtes distinctes pour plusieurs PR du même dépôt.
+const teteN = (n) => ('1' + n.toString(16)).repeat(20);
+
+test('CI de main : run vert à la tête actuelle de main : fusion', async () => {
+  const { d, fake } = monde({}, { teteMain: sha('9') });
+  await lancer(fake);
+  assert.equal(d.merges.length, 1);
+  assert.ok(fake.etat.appels.some((a) => a.includes('/repos/axion-kit/projet/branches/main') && !a.includes('/protection')));
+});
+
+test('CI de main : run vert mais tête de main plus récente : attente, aucune fusion dans le cycle', async () => {
+  const d = creerDepot('projet', { teteMain: sha('8') });
+  ajouterPr(d, 1, { head: teteN(1), retard: 1 });
+  ajouterPr(d, 2, { head: teteN(2) });
+  const fake = creerFake({ depots: [d] });
+  const r = await lancer(fake);
+  assert.equal(r.erreurs, 0);
+  assert.equal(d.merges.length, 0);
+  assert.equal(d.checks.length, 0);
+  assert.match(r.journal, /CI de main : attente/);
+});
+
+function depotAvecPrs(nombre) {
+  const d = creerDepot('projet');
+  for (let n = 1; n <= nombre; n++) ajouterPr(d, n, { head: teteN(n), retard: 1 });
+  return { d, fake: creerFake({ depots: [d] }) };
+}
+
+test('comptabilité : 2 PR en retard et fusionnables : 2 fusions dans le même cycle', async () => {
+  const { d, fake } = depotAvecPrs(2);
+  const r = await lancer(fake);
+  assert.equal(r.erreurs, 0);
+  assert.deepEqual(d.merges.map((m) => [m.pr, m.sha]), [[1, teteN(1)], [2, teteN(2)]]);
+  assert.equal(d.majs, undefined);
+  assert.doesNotMatch(r.journal, /plafond/);
+});
+
+test('comptabilité : 11 PR fusionnables : 10 fusions ce cycle (plafond), la 11e au cycle suivant', async () => {
+  const { d, fake } = depotAvecPrs(11);
+  const r = await lancer(fake);
+  assert.equal(r.erreurs, 0);
+  assert.equal(d.merges.length, 10);
+  assert.equal(d.pulls[11].state, 'open');
+  assert.match(r.journal, /plafond de 10 fusions atteint ce cycle, suite au prochain cycle/);
+  await lancer(fake);
+  assert.equal(d.merges.length, 11);
+});
+
+test('plafond : une PR non fusionnée (CI rouge) ne compte pas', async () => {
+  const { d, fake } = depotAvecPrs(11);
+  d.ci[teteN(1)] = 'failure';
+  const r = await lancer(fake);
+  assert.equal(d.merges.length, 10);
+  assert.doesNotMatch(r.journal, /plafond/);
+});
+
 test('M5 : motif *.config.* (vitest/eslint/playwright) : sensible', async () => {
   for (const f of ['vitest.config.ts', 'apps/web/eslint.config.mjs', 'playwright.config.js']) {
     const { d, fake } = monde({ fichiers: [{ filename: f, status: 'modified' }] });

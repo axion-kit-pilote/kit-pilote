@@ -86,6 +86,10 @@ export function creerFake({ depots, pilote = PILOTE }) {
       }
       return json(runsDe(d, d.mainCi, { event: 'push', head_branch: 'main', head_sha: sha('9'), pull_requests: [] }));
     }
+    if (rest === '/branches/main' && m === 'GET') {
+      // Tête actuelle de main : sha('9') par défaut (celle des runs push simulés), ou forcée par teteMain.
+      return json({ name: 'main', commit: { sha: d.teteMain ?? sha('9') } });
+    }
     if ((x = /^\/compare\/([0-9a-f]{40}|main)\.\.\.([0-9a-f]{40})$/.exec(rest))) {
       const p = Object.values(d.pulls).find((pp) => pp.toutesTetes.includes(x[2]));
       if (!p) return json({ message: 'Not Found' }, 404);

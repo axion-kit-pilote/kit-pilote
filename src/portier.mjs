@@ -8,6 +8,8 @@ import {
   fusionnerSiTeteInchangee,
 } from './lib.mjs';
 
+// Comme le train de la comptabilité : au plus 10 fusions par dépôt et par cycle.
+export const MAX_FUSIONS_PAR_CYCLE = 10;
 const CHEMIN_MOTIFS = fileURLToPath(new URL('../chemins-sensibles.txt', import.meta.url));
 
 async function alerter(ctx, o, r, problemes) {
@@ -41,8 +43,11 @@ async function traiterPr(ctx, depot, numero) {
   const ci = await etatCiAuSha(api, o, r, H, numero);
   if (ci !== 'ok') return log(`  ${etiquette} : CI ${ci} à ${H.slice(0, 7)}, rien à faire`);
 
-  // Retard sur main : plus de mise à jour demandée avant fusion (décision du 08/11/2026, méthode de la comptabilité).
-  // On fusionne si GitHub dit la PR fusionnable ; la fusion reste liée à H, et la CI de main verte est le filet.
+  // Retard sur main : plus de mise à jour demandée avant fusion. Limite assumée : la CI verte de la PR a testé
+  // « H + main au moment de la CI » ; deux PR vertes séparément peuvent être incompatibles ensemble. C'est la
+  // méthode de la comptabilité, acceptée par Will le 08/11/2026. Le filet est la CI de main, lue au début du
+  // cycle suivant (à la tête actuelle de main) : si elle est rouge, plus aucune fusion jusqu'à réparation.
+  // La fusion reste liée à H (GitHub refuse si la tête a bougé) et exige que GitHub dise la PR fusionnable.
   const retard = await comparer(api, o, r, 'main', H, { fichiers: false });
   const enRetard = retard.behind_by !== 0;
   if (enRetard) {
@@ -98,6 +103,7 @@ async function traiterPr(ctx, depot, numero) {
   await poserSucces(api, o, r, H, appId, `PR #${numero} : CI verte, aucun chemin sensible.`);
   const res = await fusionnerSiTeteInchangee(api, o, r, numero, H);
   log(res.fusionne ? `  ${etiquette} : fusionnée à ${H.slice(0, 7)}` : `  ${etiquette} : non fusionnée, ${res.raison}`);
+  return res.fusionne === true;
 }
 
 async function traiterDepot(ctx, depot) {
@@ -114,12 +120,17 @@ async function traiterDepot(ctx, depot) {
   if (ciMain !== 'ok') return log(`  CI de main : ${ciMain} -> dépôt ignoré ce cycle`);
   const prs = await api.liste(`/repos/${o}/${r}/pulls?state=open&base=main`);
   if (prs.length === 0) return log('  aucune PR ouverte');
+  let fusions = 0;
   for (const p of prs) {
     if (!p.head?.repo || p.head.repo.full_name.toLowerCase() !== `${o}/${r}`.toLowerCase()) {
       log(`  ${r}#${p.number} : ignorée (PR depuis un fork)`);
       continue;
     }
-    try { await traiterPr(ctx, depot, p.number); } catch (e) { ctx.erreurs++; log(`  ${r}#${p.number} : erreur, ${e.message}`); }
+    if (fusions >= MAX_FUSIONS_PAR_CYCLE) {
+      log(`  plafond de ${MAX_FUSIONS_PAR_CYCLE} fusions atteint ce cycle, suite au prochain cycle`);
+      break;
+    }
+    try { if ((await traiterPr(ctx, depot, p.number)) === true) fusions++; } catch (e) { ctx.erreurs++; log(`  ${r}#${p.number} : erreur, ${e.message}`); }
   }
 }
 
