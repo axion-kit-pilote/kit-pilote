@@ -75,3 +75,8 @@ METHODE.md
 *.d.ts
 proprietes.yaml
 modele-approuve.txt
+src/lib/regles-de-fer/**
+src/lib/envoi/**
+src/lib/archives/**
+src/lib/personnes-habilitations/**
+src/lib/console/**
