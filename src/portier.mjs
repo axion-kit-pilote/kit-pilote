@@ -41,21 +41,14 @@ async function traiterPr(ctx, depot, numero) {
   const ci = await etatCiAuSha(api, o, r, H, numero);
   if (ci !== 'ok') return log(`  ${etiquette} : CI ${ci} à ${H.slice(0, 7)}, rien à faire`);
 
-  // PR à jour avec main, sinon on attend la mise à jour (la CI à H ne dit rien du résultat fusionné).
+  // Retard sur main : plus de mise à jour demandée avant fusion (décision du 08/11/2026, méthode de la comptabilité).
+  // On fusionne si GitHub dit la PR fusionnable ; la fusion reste liée à H, et la CI de main verte est le filet.
   const retard = await comparer(api, o, r, 'main', H, { fichiers: false });
-  if (retard.behind_by !== 0) {
-    // Mise à jour demandée par le portier lui-même (fusion de main dans la PR, tête attendue = H) : la CI repartira
-    // sur la nouvelle tête, et l'accord de Will ne sera demandé qu'ensuite (évite un 2e clic).
-    // Conflit connu : on ne relance pas la demande à chaque cycle.
-    if (pr.mergeable === false) return log(`  ${etiquette} : pas à jour avec main (retard ${retard.behind_by}) et en conflit : en attente`);
-    try {
-      await api.ecrire('PUT', `/repos/${o}/${r}/pulls/${numero}/update-branch`, { expected_head_sha: H });
-      return log(`  ${etiquette} : pas à jour avec main (retard ${retard.behind_by}), mise à jour demandée`);
-    } catch (e) {
-      // 422 = conflit ou tête déjà changée : attente. Toute autre erreur (droits, panne, quota) remonte et est comptée.
-      if (!/ -> 422\b/.test(String(e?.message))) throw e;
-      return log(`  ${etiquette} : pas à jour avec main (retard ${retard.behind_by}), mise à jour impossible (conflit ou tête changée) : en attente`);
-    }
+  const enRetard = retard.behind_by !== 0;
+  if (enRetard) {
+    if (pr.mergeable === false) return log(`  ${etiquette} : en conflit avec main : en attente`);
+    // null = GitHub n'a pas encore calculé ; champ absent traité pareil (on ne fusionne pas à l'aveugle).
+    if (pr.mergeable !== true) return log(`  ${etiquette} : fusionnabilité inconnue, au prochain cycle`);
   }
 
   // Fichiers : compare fixé sur H (jamais /pulls/n/files, qui montre la tête « du moment »).
@@ -65,6 +58,18 @@ async function traiterPr(ctx, depot, numero) {
 
   if (raisons.length > 0) {
     log(`  ${etiquette} : sensible (${raisons.slice(0, 3).join(' ; ')}${raisons.length > 3 ? ' ; …' : ''})`);
+    // La porte refuse une PR en retard sur main : pour une PR sensible, on demande d'abord la mise à jour
+    // (tête attendue = H), et l'accord de Will ne sera demandé que sur la nouvelle tête (évite un clic perdu).
+    if (enRetard) {
+      try {
+        await api.ecrire('PUT', `/repos/${o}/${r}/pulls/${numero}/update-branch`, { expected_head_sha: H });
+        return log(`  ${etiquette} : sensible et en retard sur main (${retard.behind_by} commit(s)) : mise à jour demandée avant l'accord de Will`);
+      } catch (e) {
+        // 422 = conflit ou tête déjà changée : attente. Toute autre erreur (droits, panne, quota) remonte et est comptée.
+        if (!/ -> 422\b/.test(String(e?.message))) throw e;
+        return log(`  ${etiquette} : sensible et en retard sur main : mise à jour impossible (conflit ou tête changée) : en attente`);
+      }
+    }
     let controle = (await controlesPortier(api, o, r, H, appId))[0];
     if (!controle) {
       const resume = `PR #${numero} sensible. En attente de l'approbation de Will.\n${raisons.slice(0, 20).join('\n')}`;

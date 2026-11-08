@@ -171,37 +171,70 @@ test('B1 : tête changée juste avant le feu vert : aucun contrôle success pos�
   assert.equal(d.merges.length, 0);
 });
 
-test('I1 : PR en retard sur main (behind_by > 0) : mise à jour demandée à la tête lue, ni fusion ni contrôle', async () => {
+// Décision du 08/11/2026 (méthode de la comptabilité) : une PR en retard sur main n'est plus mise à jour avant fusion.
+test('I1 : PR en retard sur main et fusionnable : fusion directe à H, sans mise à jour', async () => {
   const { d, fake } = monde({ retard: 2 });
   const r = await lancer(fake);
-  assert.equal(d.merges.length, 0);
-  assert.equal(d.checks.length, 0);
-  assert.equal(d.majs.length, 1);
-  assert.equal(d.majs[0].expected_head_sha, d.pulls[1].reelle);
-  assert.match(r.journal, /mise à jour demandée/);
+  assert.equal(r.erreurs, 0);
+  assert.equal(d.majs, undefined);
+  assert.deepEqual(d.merges, [{ pr: 1, sha: H, merge_method: 'merge' }]);
+  assert.equal(d.checks[0].conclusion, 'success');
+  assert.equal(d.checks[0].head_sha, H);
+  assert.match(r.journal, /fusionnée/);
 });
 
-test('I1 : PR en retard avec conflit : ni mise à jour, ni fusion, ni erreur', async () => {
+test('I1 : PR en retard, fusionnabilité pas encore calculée (null) : attente, ni fusion ni contrôle ni mise à jour', async () => {
   const { d, fake } = monde({ retard: 2 });
-  d.pulls[1].conflit = true;
+  d.pulls[1].mergeable = null;
   const r = await lancer(fake);
+  assert.equal(r.erreurs, 0);
   assert.equal(d.merges.length, 0);
   assert.equal(d.checks.length, 0);
   assert.equal(d.majs, undefined);
-  assert.match(r.journal, /mise à jour impossible/);
+  assert.match(r.journal, /fusionnabilité inconnue, au prochain cycle/);
 });
 
-test('I1 : PR en retard, tête changée entre lecture et mise à jour : rien (422)', async () => {
+test('I1 : PR en retard avec conflit (mergeable false) : attente, ni mise à jour, ni fusion, ni erreur', async () => {
+  const { d, fake } = monde({ retard: 2 });
+  d.pulls[1].conflit = true;
+  const r = await lancer(fake);
+  assert.equal(r.erreurs, 0);
+  assert.equal(d.merges.length, 0);
+  assert.equal(d.checks.length, 0);
+  assert.equal(d.majs, undefined);
+  assert.match(r.journal, /en conflit avec main : en attente/);
+});
+
+test('PR à jour avec main : fusionnée même si la fusionnabilité est inconnue (règle inchangée)', async () => {
+  const { d, fake } = monde({});
+  d.pulls[1].mergeable = null;
+  await lancer(fake);
+  assert.equal(d.merges.length, 1);
+});
+
+test('I1 : PR en retard, tête changée avant la fusion : GitHub refuse (409), pas de fusion', async () => {
   const { d, fake } = monde({ retard: 2 });
   d.pulls[1].reelle = sha('c');
   const r = await lancer(fake);
   assert.equal(d.majs, undefined);
   assert.equal(d.merges.length, 0);
+  assert.match(r.journal, /non fusionnée/);
+});
+
+const fichiersSensibles = [{ filename: '.github/workflows/ci.yml', status: 'modified' }];
+test('I1 : PR sensible en retard, tête changée (422) : rien, en attente', async () => {
+  const { d, fake } = monde({ retard: 2, fichiers: fichiersSensibles });
+  d.pulls[1].reelle = sha('c');
+  const r = await lancer(fake);
+  assert.equal(r.erreurs, 0);
+  assert.equal(d.majs, undefined);
+  assert.equal(d.merges.length, 0);
+  assert.equal(fake.etat.dispatches.length, 0);
   assert.match(r.journal, /mise à jour impossible/);
 });
 
-test('I1 : PR en retard, mise à jour refusée pour une autre raison (403) : erreur comptée', async () => {
-  const { d, fake } = monde({ retard: 2 });
+test('I1 : PR sensible en retard, mise à jour refusée pour une autre raison (403) : erreur comptée', async () => {
+  const { d, fake } = monde({ retard: 2, fichiers: fichiersSensibles });
   d.pulls[1].majStatut = 403;
   const r = await lancer(fake);
   assert.ok(r.erreurs >= 1);
@@ -214,20 +247,25 @@ test('I1 : PR en retard et brouillon : aucune mise à jour', async () => {
   d.pulls[1].draft = true;
   await lancer(fake);
   assert.equal(d.majs, undefined);
+  assert.equal(d.merges.length, 0);
 });
 
 test('I1 : PR en retard depuis un fork : aucune mise à jour', async () => {
   const { d, fake } = monde({ retard: 2, fork: true });
   await lancer(fake);
   assert.equal(d.majs, undefined);
+  assert.equal(d.merges.length, 0);
 });
 
-test('I1 : PR sensible en retard : mise à jour seule, ni contrôle ni demande à Will', async () => {
-  const { d, fake } = monde({ retard: 2, fichiers: [{ filename: '.github/workflows/ci.yml', status: 'modified' }] });
-  await lancer(fake);
+test('I1 : PR sensible en retard : mise à jour seule (la porte refuse une PR en retard), ni contrôle ni demande à Will', async () => {
+  const { d, fake } = monde({ retard: 2, fichiers: fichiersSensibles });
+  const r = await lancer(fake);
   assert.equal(d.majs.length, 1);
+  assert.equal(d.majs[0].expected_head_sha, H);
   assert.equal(d.checks.length, 0);
+  assert.equal(d.merges.length, 0);
   assert.equal(fake.etat.dispatches.length, 0);
+  assert.match(r.journal, /mise à jour demandée avant l'accord de Will/);
 });
 
 test('I1 : seul un run ci.yml pull_request de ce dépôt, à H, lié à la PR, compte', async () => {
