@@ -127,12 +127,19 @@ export async function etatCiAuSha(api, o, r, sha, n) {
     (x.pull_requests ?? []).some((p) => p.number === n));
   return etatRun(plusRecent(valides));
 }
-// Dernier run de ci.yml sur main : event=push, même chemin, même dépôt.
+// Dernier run de ci.yml sur main : event=push, même chemin, même dépôt, et lancé sur la tête ACTUELLE de main.
+// Tête de main lue AVANT les runs : si main avance entre les deux lectures, les SHA diffèrent et on attend.
+// Run vert mais sur une tête plus ancienne = « attente » (la CI de la nouvelle tête n'a pas encore tourné).
 export async function etatCiMain(api, o, r) {
+  const tete = (await api.lire(`/repos/${o}/${r}/branches/main`))?.commit?.sha;
   const d = await api.lire(`/repos/${o}/${r}/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=100`);
   const valides = (d.workflow_runs ?? []).filter((x) =>
     x.event === 'push' && x.path === CHEMIN_CI && memeDepot(x.repository, o, r) && (x.head_branch ?? 'main') === 'main');
-  return etatRun(plusRecent(valides));
+  const run = plusRecent(valides);
+  const e = etatRun(run);
+  if (e !== 'ok') return e;
+  if (!/^[0-9a-f]{40}$/.test(tete ?? '') || run.head_sha !== tete) return 'attente';
+  return 'ok';
 }
 
 // ---- compare : fichiers fixés sur un commit, jamais « la tête du moment » ----

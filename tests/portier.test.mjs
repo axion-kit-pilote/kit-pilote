@@ -171,37 +171,70 @@ test('B1 : tête changée juste avant le feu vert : aucun contrôle success pos�
   assert.equal(d.merges.length, 0);
 });
 
-test('I1 : PR en retard sur main (behind_by > 0) : mise à jour demandée à la tête lue, ni fusion ni contrôle', async () => {
+// Décision du 08/11/2026 (méthode de la comptabilité) : une PR en retard sur main n'est plus mise à jour avant fusion.
+test('I1 : PR en retard sur main et fusionnable : fusion directe à H, sans mise à jour', async () => {
   const { d, fake } = monde({ retard: 2 });
   const r = await lancer(fake);
-  assert.equal(d.merges.length, 0);
-  assert.equal(d.checks.length, 0);
-  assert.equal(d.majs.length, 1);
-  assert.equal(d.majs[0].expected_head_sha, d.pulls[1].reelle);
-  assert.match(r.journal, /mise à jour demandée/);
+  assert.equal(r.erreurs, 0);
+  assert.equal(d.majs, undefined);
+  assert.deepEqual(d.merges, [{ pr: 1, sha: H, merge_method: 'merge' }]);
+  assert.equal(d.checks[0].conclusion, 'success');
+  assert.equal(d.checks[0].head_sha, H);
+  assert.match(r.journal, /fusionnée/);
 });
 
-test('I1 : PR en retard avec conflit : ni mise à jour, ni fusion, ni erreur', async () => {
+test('I1 : PR en retard, fusionnabilité pas encore calculée (null) : attente, ni fusion ni contrôle ni mise à jour', async () => {
   const { d, fake } = monde({ retard: 2 });
-  d.pulls[1].conflit = true;
+  d.pulls[1].mergeable = null;
   const r = await lancer(fake);
+  assert.equal(r.erreurs, 0);
   assert.equal(d.merges.length, 0);
   assert.equal(d.checks.length, 0);
   assert.equal(d.majs, undefined);
-  assert.match(r.journal, /mise à jour impossible/);
+  assert.match(r.journal, /fusionnabilité inconnue, au prochain cycle/);
 });
 
-test('I1 : PR en retard, tête changée entre lecture et mise à jour : rien (422)', async () => {
+test('I1 : PR en retard avec conflit (mergeable false) : attente, ni mise à jour, ni fusion, ni erreur', async () => {
+  const { d, fake } = monde({ retard: 2 });
+  d.pulls[1].conflit = true;
+  const r = await lancer(fake);
+  assert.equal(r.erreurs, 0);
+  assert.equal(d.merges.length, 0);
+  assert.equal(d.checks.length, 0);
+  assert.equal(d.majs, undefined);
+  assert.match(r.journal, /en conflit avec main : en attente/);
+});
+
+test('PR à jour avec main : fusionnée même si la fusionnabilité est inconnue (règle inchangée)', async () => {
+  const { d, fake } = monde({});
+  d.pulls[1].mergeable = null;
+  await lancer(fake);
+  assert.equal(d.merges.length, 1);
+});
+
+test('I1 : PR en retard, tête changée avant la fusion : GitHub refuse (409), pas de fusion', async () => {
   const { d, fake } = monde({ retard: 2 });
   d.pulls[1].reelle = sha('c');
   const r = await lancer(fake);
   assert.equal(d.majs, undefined);
   assert.equal(d.merges.length, 0);
+  assert.match(r.journal, /non fusionnée/);
+});
+
+const fichiersSensibles = [{ filename: '.github/workflows/ci.yml', status: 'modified' }];
+test('I1 : PR sensible en retard, tête changée (422) : rien, en attente', async () => {
+  const { d, fake } = monde({ retard: 2, fichiers: fichiersSensibles });
+  d.pulls[1].reelle = sha('c');
+  const r = await lancer(fake);
+  assert.equal(r.erreurs, 0);
+  assert.equal(d.majs, undefined);
+  assert.equal(d.merges.length, 0);
+  assert.equal(fake.etat.dispatches.length, 0);
   assert.match(r.journal, /mise à jour impossible/);
 });
 
-test('I1 : PR en retard, mise à jour refusée pour une autre raison (403) : erreur comptée', async () => {
-  const { d, fake } = monde({ retard: 2 });
+test('I1 : PR sensible en retard, mise à jour refusée pour une autre raison (403) : erreur comptée', async () => {
+  const { d, fake } = monde({ retard: 2, fichiers: fichiersSensibles });
   d.pulls[1].majStatut = 403;
   const r = await lancer(fake);
   assert.ok(r.erreurs >= 1);
@@ -214,20 +247,25 @@ test('I1 : PR en retard et brouillon : aucune mise à jour', async () => {
   d.pulls[1].draft = true;
   await lancer(fake);
   assert.equal(d.majs, undefined);
+  assert.equal(d.merges.length, 0);
 });
 
 test('I1 : PR en retard depuis un fork : aucune mise à jour', async () => {
   const { d, fake } = monde({ retard: 2, fork: true });
   await lancer(fake);
   assert.equal(d.majs, undefined);
+  assert.equal(d.merges.length, 0);
 });
 
-test('I1 : PR sensible en retard : mise à jour seule, ni contrôle ni demande à Will', async () => {
-  const { d, fake } = monde({ retard: 2, fichiers: [{ filename: '.github/workflows/ci.yml', status: 'modified' }] });
-  await lancer(fake);
+test('I1 : PR sensible en retard : mise à jour seule (la porte refuse une PR en retard), ni contrôle ni demande à Will', async () => {
+  const { d, fake } = monde({ retard: 2, fichiers: fichiersSensibles });
+  const r = await lancer(fake);
   assert.equal(d.majs.length, 1);
+  assert.equal(d.majs[0].expected_head_sha, H);
   assert.equal(d.checks.length, 0);
+  assert.equal(d.merges.length, 0);
   assert.equal(fake.etat.dispatches.length, 0);
+  assert.match(r.journal, /mise à jour demandée avant l'accord de Will/);
 });
 
 test('I1 : seul un run ci.yml pull_request de ce dépôt, à H, lié à la PR, compte', async () => {
@@ -265,6 +303,62 @@ test('I1 : CI de main : seuls les runs event=push du bon chemin et du dépôt co
     await lancer(fake);
     assert.equal(d.merges.length, 0, JSON.stringify(m));
   }
+});
+
+// Têtes distinctes pour plusieurs PR du même dépôt.
+const teteN = (n) => ('1' + n.toString(16)).repeat(20);
+
+test('CI de main : run vert à la tête actuelle de main : fusion', async () => {
+  const { d, fake } = monde({}, { teteMain: sha('9') });
+  await lancer(fake);
+  assert.equal(d.merges.length, 1);
+  assert.ok(fake.etat.appels.some((a) => a.includes('/repos/axion-kit/projet/branches/main') && !a.includes('/protection')));
+});
+
+test('CI de main : run vert mais tête de main plus récente : attente, aucune fusion dans le cycle', async () => {
+  const d = creerDepot('projet', { teteMain: sha('8') });
+  ajouterPr(d, 1, { head: teteN(1), retard: 1 });
+  ajouterPr(d, 2, { head: teteN(2) });
+  const fake = creerFake({ depots: [d] });
+  const r = await lancer(fake);
+  assert.equal(r.erreurs, 0);
+  assert.equal(d.merges.length, 0);
+  assert.equal(d.checks.length, 0);
+  assert.match(r.journal, /CI de main : attente/);
+});
+
+function depotAvecPrs(nombre) {
+  const d = creerDepot('projet');
+  for (let n = 1; n <= nombre; n++) ajouterPr(d, n, { head: teteN(n), retard: 1 });
+  return { d, fake: creerFake({ depots: [d] }) };
+}
+
+test('comptabilité : 2 PR en retard et fusionnables : 2 fusions dans le même cycle', async () => {
+  const { d, fake } = depotAvecPrs(2);
+  const r = await lancer(fake);
+  assert.equal(r.erreurs, 0);
+  assert.deepEqual(d.merges.map((m) => [m.pr, m.sha]), [[1, teteN(1)], [2, teteN(2)]]);
+  assert.equal(d.majs, undefined);
+  assert.doesNotMatch(r.journal, /plafond/);
+});
+
+test('comptabilité : 11 PR fusionnables : 10 fusions ce cycle (plafond), la 11e au cycle suivant', async () => {
+  const { d, fake } = depotAvecPrs(11);
+  const r = await lancer(fake);
+  assert.equal(r.erreurs, 0);
+  assert.equal(d.merges.length, 10);
+  assert.equal(d.pulls[11].state, 'open');
+  assert.match(r.journal, /plafond de 10 fusions atteint ce cycle, suite au prochain cycle/);
+  await lancer(fake);
+  assert.equal(d.merges.length, 11);
+});
+
+test('plafond : une PR non fusionnée (CI rouge) ne compte pas', async () => {
+  const { d, fake } = depotAvecPrs(11);
+  d.ci[teteN(1)] = 'failure';
+  const r = await lancer(fake);
+  assert.equal(d.merges.length, 10);
+  assert.doesNotMatch(r.journal, /plafond/);
 });
 
 test('M5 : motif *.config.* (vitest/eslint/playwright) : sensible', async () => {

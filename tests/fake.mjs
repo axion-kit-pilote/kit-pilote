@@ -47,7 +47,9 @@ export function creerFake({ depots, pilote = PILOTE }) {
   const prVue = (d, p, avance) => {
     const head = p.tetes.length > 1 && avance ? p.tetes.shift() : p.tetes[0];
     const nom = p.fork ? 'autre/fork' : `axion-kit/${d.name}`;
-    return { number: p.number, state: p.state, draft: p.draft, base: { ref: p.base.ref, sha: sha('0') }, head: { ...(p.sansSha ? {} : { sha: head }), repo: { full_name: nom } }, changed_files: p.changed ?? p.fichiers.length };
+    return { number: p.number, state: p.state, draft: p.draft, base: { ref: p.base.ref, sha: sha('0') }, head: { ...(p.sansSha ? {} : { sha: head }), repo: { full_name: nom } }, changed_files: p.changed ?? p.fichiers.length,
+      // Fusionnabilité vue par GitHub : true par défaut, false si conflit, ou forcée (null = pas encore calculée).
+      mergeable: 'mergeable' in p ? p.mergeable : !p.conflit };
   };
 
   async function fetchFake(url, init = {}) {
@@ -83,6 +85,10 @@ export function creerFake({ depots, pilote = PILOTE }) {
         return json(runsDe(d, d.ci[h], { head_sha: h, pull_requests: prs }));
       }
       return json(runsDe(d, d.mainCi, { event: 'push', head_branch: 'main', head_sha: sha('9'), pull_requests: [] }));
+    }
+    if (rest === '/branches/main' && m === 'GET') {
+      // Tête actuelle de main : sha('9') par défaut (celle des runs push simulés), ou forcée par teteMain.
+      return json({ name: 'main', commit: { sha: d.teteMain ?? sha('9') } });
     }
     if ((x = /^\/compare\/([0-9a-f]{40}|main)\.\.\.([0-9a-f]{40})$/.exec(rest))) {
       const p = Object.values(d.pulls).find((pp) => pp.toutesTetes.includes(x[2]));
